@@ -1,7 +1,7 @@
 import copy
 import os
 import torch
-from argparse import ArgumentParser, Namespace
+from argparse import ArgumentParser, Namespace, BooleanOptionalAction
 from rdkit.Chem import RemoveHs
 from functools import partial
 import numpy as np
@@ -41,11 +41,12 @@ parser.add_argument('--inference_steps', type=int, default=20, help='Number of d
 parser.add_argument('--actual_steps', type=int, default=None, help='Number of denoising steps that are actually performed')
 
 # CONIFER POINT
-parser.add_argument('--keep_hs', type=bool, default=None, help='Keep hydrogens in the results')
-parser.add_argument('--remove_hs_score', type=bool, default=None, help='Force remove_hs for the score model InferenceDataset')
-parser.add_argument('--remove_hs_confidence', type=bool, default=None, help='Force remove_hs for the confidence model InferenceDataset')
-parser.add_argument('--remove_hs_output', type=bool, default=None, help='Force remove_hs for the resulting poses')
-parser.add_argument('--keep_src_3d', type=bool, default=None, help='Force whether or not to drop the 3D coordinates for 3D input')
+parser.add_argument('--add_hs', action=BooleanOptionalAction, default=False, help='Add hydrogens to poses before writing out poses')
+parser.add_argument('--keep_src_3d', action=BooleanOptionalAction, default=False, help='Whether or not to drop the 3D coordinates for 3D input')
+parser.add_argument('--keep_hs', action=BooleanOptionalAction, default=False, help='Keep hydrogens during processing')
+parser.add_argument('--remove_hs_score', action=BooleanOptionalAction, help='Force remove_hs for the score model InferenceDataset')
+parser.add_argument('--remove_hs_confidence', action=BooleanOptionalAction, help='Force remove_hs for the confidence model InferenceDataset')
+parser.add_argument('--remove_hs_output', action=BooleanOptionalAction, help='Force remove_hs for the resulting poses')
 
 args = parser.parse_args()
 
@@ -78,10 +79,11 @@ for name in complex_name_list:
 # CONIFER POINT
 # Defaults
 print(args)
+add_hs = args.add_hs
+keep_src_3d = args.keep_src_3d
 remove_hs_score = score_model_args.remove_hs
 remove_hs_confidence = confidence_args.remove_hs
 remove_hs_output = score_model_args.remove_hs
-keep_src_3d = False
 
 # General override
 if args.keep_hs:
@@ -90,15 +92,14 @@ if args.keep_hs:
     remove_hs_output = False
 
 # Individual override
-truish = lambda x: x in [True, "true", "True", "1"]
-if args.remove_hs_score is not None: remove_hs_score = truish(args.remove_hs_score)
-if args.remove_hs_confidence is not None: remove_hs_confidence = truish(args.remove_hs_confidence)
-if args.remove_hs_output is not None: remove_hs_output = truish(args.remove_hs_output)
-if args.keep_src_3d is not None: keep_src_3d = truish(args.keep_src_3d)
-# DONE CONIFER POINT
+if args.remove_hs_score is not None: remove_hs_score = args.remove_hs_score
+if args.remove_hs_confidence is not None: remove_hs_confidence = args.remove_hs_confidence
+if args.remove_hs_output is not None: remove_hs_output = args.remove_hs_output
 
 import json
-print(f"Special vars: remove_hs_score={json.dumps(remove_hs_score)} remove_hs_confidence={json.dumps(remove_hs_confidence)} remove_hs_output={json.dumps(remove_hs_output)} keep_src_3d={json.dumps(keep_src_3d)}")
+print(f"Special vars: add_hs={json.dumps(add_hs)} keep_src_3d={json.dumps(keep_src_3d)} remove_hs_score={json.dumps(remove_hs_score)} remove_hs_confidence={json.dumps(remove_hs_confidence)} remove_hs_output={json.dumps(remove_hs_output)}")
+# DONE CONIFER POINT
+
 # preprocessing of complexes into geometric graphs
 test_dataset = InferenceDataset(out_dir=args.out_dir, complex_names=complex_name_list, protein_files=protein_path_list,
                                 ligand_descriptions=ligand_description_list, protein_sequences=protein_sequence_list,
@@ -207,8 +208,8 @@ for idx, orig_complex_graph in tqdm(enumerate(test_loader)):
         for rank, pos in enumerate(ligand_pos):
             mol_pred = copy.deepcopy(lig)
             if remove_hs_output: mol_pred = RemoveHs(mol_pred)
-            if rank == 0: write_mol_with_coords(mol_pred, pos, os.path.join(write_dir, f'rank{rank+1}.sdf'))
-            write_mol_with_coords(mol_pred, pos, os.path.join(write_dir, f'rank{rank+1}_confidence{confidence[rank]:.2f}.sdf'))
+            if rank == 0: write_mol_with_coords(mol_pred, pos, os.path.join(write_dir, f'rank{rank+1}.sdf'), add_hs=add_hs)
+            write_mol_with_coords(mol_pred, pos, os.path.join(write_dir, f'rank{rank+1}_confidence{confidence[rank]:.2f}.sdf'), add_hs=add_hs)
 
         # save visualisation frames
         if args.save_visualisation:
