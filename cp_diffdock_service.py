@@ -71,7 +71,7 @@ async def queueWorker(queue):
                 await sendResults(requestContext, response)
                 log.info("queueWorker sent response.")
             except Exception as ex:
-                logger.exception(f"queueWorker encountered exception")
+                log.exception(f"queueWorker encountered exception")
                 await sendError(requestContext, f"Service exception: {ex}")
 
             # Notify the queue that the item has been processed
