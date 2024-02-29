@@ -172,6 +172,7 @@ async def sendResults(requestContext, responseObj):
 # ENTRYPOINT
 arg_parser = ArgumentParser()
 arg_parser.add_argument('--port', type=int, default=9002, help='Port to listen on')
+arg_parser.add_argument('--worker_count', type=int, default=5, help='Number of worker threads to run')
 args = arg_parser.parse_args()
 log.info("Starting inference service...")
-asyncio.run(main(port=args.port))
+asyncio.run(main(port=args.port, worker_count=args.worker_count))
