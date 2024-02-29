@@ -106,3 +106,6 @@ class DiffDockProtocol:
                 results=[DiffDockProtocol.Result.from_dict(r) for r in data['results']],
                 message=data['message']
             )
+
+        def to_json(self):
+            return json.dumps(self, default=lambda x: x.__dict__)

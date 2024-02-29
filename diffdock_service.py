@@ -112,12 +112,6 @@ async def main(host="localhost", port=9002, max_size=2**24, worker_count=5):
         os._exit(0)
         
 
-arg_parser = ArgumentParser()
-arg_parser.add_argument('--port', type=int, default=9002, help='Port to listen on')
-args = arg_parser.parse_args()
-log.info("Starting inference service...")
-asyncio.run(main(port=args.port))
-
 ## Helpers
 def extractWsAppRequest(req):
     """
@@ -132,7 +126,7 @@ def extractWsAppRequest(req):
 
 
 async def sendPacket(requestContext, responseObj):
-    responseData = json.dumps(responseObj, default=lambda x: x.__dict__)
+    responseData = responseObj.to_json()
     websocket, requestId = requestContext
 
     if not requestId:
@@ -172,3 +166,11 @@ async def sendError(requestContext, error):
 
 async def sendResults(requestContext, responseObj):
     return await sendPacket(requestContext, responseObj)
+
+
+# ENTRYPOINT
+arg_parser = ArgumentParser()
+arg_parser.add_argument('--port', type=int, default=9002, help='Port to listen on')
+args = arg_parser.parse_args()
+log.info("Starting inference service...")
+asyncio.run(main(port=args.port))
