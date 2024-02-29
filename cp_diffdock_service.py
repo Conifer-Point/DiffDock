@@ -2,12 +2,13 @@ import asyncio
 import json
 import logging
 import re
+import os
 from websockets.server import serve
 import concurrent.futures
 from argparse import ArgumentParser
 
-from diffdock_protocol import DiffDockProtocol
-from diffdock_api import DiffDockApi
+from cp_diffdock_protocol import DiffDockProtocol
+from cp_diffdock_api import DiffDockApi
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('diffdock_service')
@@ -88,7 +89,7 @@ async def main(host="localhost", port=9002, max_size=2**24, worker_count=5):
     async def handlerWrapper(websocket, path):
         await handleRequest(websocket, queue)
 
-    log.info(f"DiffDock service starting websocket listener at {host}:{port}...")
+    log.info(f"DiffDock service running with pid {os.getpid()}, listening at {host}:{port}...")
     start_server = serve(handlerWrapper, host, port, max_size=max_size)
 
     log.info(f"DiffDock ready.")

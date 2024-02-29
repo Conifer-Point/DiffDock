@@ -3,8 +3,8 @@ import logging
 from argparse import ArgumentParser
 from pathlib import Path
 
-from diffdock_protocol import DiffDockProtocol
-from diffdock_api import DiffDockApi, DiffDockOptions
+from cp_diffdock_protocol import DiffDockProtocol
+from cp_diffdock_api import DiffDockApi, DiffDockOptions
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)

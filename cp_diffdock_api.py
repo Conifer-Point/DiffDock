@@ -2,28 +2,35 @@ import os
 import errno
 import re
 import logging
+import threading
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import List
 
-from diffdock_protocol import DiffDockProtocol
-from inference_module import InferenceArgs, RunInference
+from cp_diffdock_protocol import DiffDockProtocol
+from cp_inference_module import InferenceArgs, RunInference
 
 log = logging.getLogger('diffdock_api')
 
 #
 # DiffDock API - Wrapper for running DiffDock with DiffDockProtocol objects for requests and responses
 #
+class RequestIdGenerator:
+    def __init__(self):
+        self.count = 0
+        self.lock = threading.Lock()
 
-count = 0
-def getNewRequestId():
-    global count
-    count += 1
-    return count
+    def get_id(self):
+        with self.lock:
+            result = self.count
+            self.count += 1
+            return result
+requestIdGenerator = RequestIdGenerator()
 
 @dataclass
 class PreppedComplexUnit:
     name: str
+    label: str = ""
     path: str = ""
     error: str = ""
 
@@ -32,7 +39,7 @@ class PreppedComplexUnit:
 
     def __iter__(self):
         # Specific about fields here so error isn't included when unpacking
-        return iter([self.name, self.path])
+        return iter([self.name, self.label, self.path])
 
 
 @dataclass
@@ -58,7 +65,18 @@ class PreppedRequest:
 
 @dataclass
 class DiffDockOptions:
-    work_dir: Path = Path(f"/tmp/diffdock{os.getpid()}/dock_{getNewRequestId()}")
+    work_dir: Path
+
+    @staticmethod
+    def make(baseDir=None, requestId=None):
+        if baseDir is None:
+            baseDir = f"/tmp/diffdock{os.getpid()}"
+        if requestId is None:
+            requestId = requestIdGenerator.get_id()
+        work_dir = Path(baseDir) / f"dock_{requestId}"
+        return DiffDockOptions(
+            work_dir=work_dir
+        )
 
 
 class DiffDockSetupException(Exception):
@@ -67,7 +85,7 @@ class DiffDockSetupException(Exception):
 
 class DiffDockApi:
     @staticmethod
-    def run_diffdock(request: DiffDockProtocol.Request, options: DiffDockOptions=DiffDockOptions()) -> DiffDockProtocol.Response:
+    def run_diffdock(request: DiffDockProtocol.Request, options: DiffDockOptions=None) -> DiffDockProtocol.Response:
         try:
             log.info("diffdock preparing request...")
             preppedRequest = DiffDockApi.prepare_request(request, options)
@@ -90,13 +108,16 @@ class DiffDockApi:
 
 
     @staticmethod
-    def prepare_request(docking_request: DiffDockProtocol.Request, options: DiffDockOptions=DiffDockOptions()) -> PreppedRequest:
+    def prepare_request(docking_request: DiffDockProtocol.Request, options: DiffDockOptions=None) -> PreppedRequest:
         """
         DiffDock works on files in directories. This function prepares the pdb, sdf, and csv files needed
         to fulfill the DiffDock request.
         """
 
         # Create temp directory for this run
+        if options is None:
+            options = DiffDockOptions.make()
+
         work_dir = options.work_dir
         try:
             os.makedirs(work_dir)
@@ -108,24 +129,26 @@ class DiffDockApi:
         protein_entries: List[PreppedComplexUnit] = []
         for protein_i, protein in enumerate(docking_request.proteins):
             protein_name, proteinData = protein
-            pdb_file = work_dir / f"{protein_name}.pdb"
+            protein_label = f"protein{protein_i}"
+            pdb_file = work_dir / f"{protein_label}.pdb"
             try:
                 with open(pdb_file, 'w') as f:
                     f.write(proteinData)
-                protein_entries.append(PreppedComplexUnit(protein_name, pdb_file))
+                protein_entries.append(PreppedComplexUnit(protein_name, protein_label, pdb_file))
             except IOError as e:
                 msg = f"DiffDock failed to write a protein file: {e.strerror}"
                 protein_entries.append(PreppedComplexUnit(protein_name, error=msg))
 
         # Write and remember ligand files
         ligand_entries: List[PreppedComplexUnit] = []
-        for cmpd_i, ligand in enumerate(docking_request.ligands):
+        for ligand_i, ligand in enumerate(docking_request.ligands):
             ligand_name, ligandData = ligand
-            sdf_file = work_dir / f"{ligand_name}.sdf"
+            ligand_label = f"ligand{ligand_i}"
+            sdf_file = work_dir / f"{ligand_label}.sdf"
             try:
                 with open(sdf_file, 'w') as f:
                     f.write(ligandData)
-                ligand_entries.append(PreppedComplexUnit(ligand_name, sdf_file))
+                ligand_entries.append(PreppedComplexUnit(ligand_name, ligand_label, sdf_file))
             except IOError as e:
                 msg = f"DiffDock failed to write ligand file: {e.strerror}"
                 ligand_entries.append(PreppedComplexUnit(ligand_name, error=msg))
@@ -134,7 +157,7 @@ class DiffDockApi:
         docking_entries: List[PreppedComplex] = []
         for protein_entry in protein_entries:
             for ligand_entry in ligand_entries:
-                complex_name = f"{protein_entry.name}-{ligand_entry.name}"
+                complex_name = f"{protein_entry.label}-{ligand_entry.label}"
                 docking_entries.append(PreppedComplex(complex_name, protein_entry, ligand_entry))
 
         csv_file = work_dir / "bmaps_diffdock.csv"
@@ -146,6 +169,7 @@ class DiffDockApi:
             except IOError as e:
                 raise DiffDockSetupException(f"Could not write diffdock csv file: {e.strerror}")
         else:
+            log.info(f"Couldn't prepare diffdock csv. Entries: {docking_entries}")
             raise DiffDockSetupException("No suitable complexes")
 
         out_dir = work_dir / "results"
@@ -207,8 +231,8 @@ class DiffDockApi:
         for entry in entries:
             complex_name, protein_unit, ligand_unit = entry
             log.info(f"Working with {complex_name=} {type(protein_unit)} {type(ligand_unit)}")
-            protein_name, protein_file = protein_unit
-            ligand_name, ligand_file = ligand_unit
+            protein_name, protein_label, protein_file = protein_unit
+            ligand_name, ligand_label, ligand_file = ligand_unit
             if protein_unit.ok() and ligand_unit.ok():
                 csv += f"{complex_name},{protein_file},{ligand_file},\n"
         return "" if csv == "" else header + csv

@@ -1,6 +1,6 @@
 import json
 
-from diffdock_protocol import DiffDockProtocol
+from cp_diffdock_protocol import DiffDockProtocol
 
 
 def main():
