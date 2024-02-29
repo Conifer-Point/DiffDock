@@ -1,0 +1,8 @@
+{
+    "proteins": [
+	{ "name": "4K6", "data": "hello" } 	
+    ],
+    "ligands": [
+	{ "name": "4K6", "data": "goodbye" } 
+    ]
+}
