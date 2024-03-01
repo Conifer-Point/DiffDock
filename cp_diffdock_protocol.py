@@ -4,6 +4,7 @@ from typing import List, Any
 from collections import namedtuple
 
 class DiffDockProtocol:
+    # Can be used like enum
     MessageType = namedtuple('MessageType', ['INVALID', 'ERROR', 'RESULTS', 'STATUS'])('invalid', 'error', 'results', 'status')
 
     @dataclass
@@ -50,6 +51,9 @@ class DiffDockProtocol:
             
     @dataclass
     class Pose:
+        """
+        One pose from a DiffDock result.
+        """
         filename: str
         sdf: str
         rank: int
@@ -60,6 +64,9 @@ class DiffDockProtocol:
 
     @dataclass
     class Result:
+        """
+        Results for one DiffDock protein-ligand complex, either a list of poses or an error.
+        """
         proteinName: str
         ligandName: str
         poses: List['DiffDockProtocol.Pose'] = field(default_factory=list)
@@ -76,6 +83,9 @@ class DiffDockProtocol:
 
     @dataclass
     class Response:
+        """
+        Response for the entire DiffDock request, either a list of results, an error, or a status update.
+        """
         messageType: 'DiffDockProtocol.MessageType' = 'invalid'
         results: List['DiffDockProtocol.Result'] = field(default_factory=list)
         message: str = ''

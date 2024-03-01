@@ -31,9 +31,12 @@ async def handleRequest(websocket, queue):
         return
 
     log.info("Received a request.")
+    # Optional special handling for messages from bfd-server or other Bioleap WsApps
+    # requestId is non-empty if it is from a wsApp, and will need to be included in responses.
     requestId, cmdName, requestData = extractWsAppMessage(message)
     requestContext = websocket, requestId
 
+    # Parse
     try:
         requestObj = DiffDockProtocol.Request.from_json(requestData)
     except:
@@ -41,10 +44,11 @@ async def handleRequest(websocket, queue):
         await sendError(requestContext, f"Invalid request")
         return
 
+    # Enqueue
     log.info("handleRequest running a request...")
     try:
         # Put the request into the queue with a condition to resolve when it finishes.
-        # Otherwise the websocket will close early
+        # Condition protects the websocket from closing early.
         condition = asyncio.Condition()
         await queue.put((requestObj, requestContext, condition))
         await sendStatus(requestContext, "Request received")
@@ -68,8 +72,8 @@ async def queueWorker(queue):
             try:
                 # Since this is async, but diffdock is not, it seems it is tricky.
                 # run_in_executor seemed to do the trick.
-                # We want to make sure we don't block other connections from putting their requests
-                # into the queue.
+                # We want to make sure that diffdock execution doesn't block other
+                # connections from putting their requests into the queue.
                 await sendStatus(requestContext, "Working request...")
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(executor, DiffDockApi.run_diffdock, requestObj)
@@ -89,6 +93,10 @@ async def queueWorker(queue):
 
 
 async def main(host="localhost", port=9002, max_size=2**24, worker_count=5):
+    """
+    DiffDock websocket server main loop.
+    Set up the queue, worker threads, and listen for connections.
+    """
     queue = asyncio.Queue()
     workers = [asyncio.create_task(queueWorker(queue)) for _ in range(worker_count)]
 

@@ -15,6 +15,7 @@ log = logging.getLogger('diffdock_api')
 #
 # DiffDock API - Wrapper for running DiffDock with DiffDockProtocol objects for requests and responses
 #
+
 class RequestIdGenerator:
     def __init__(self):
         self.count = 0
@@ -29,6 +30,9 @@ requestIdGenerator = RequestIdGenerator()
 
 @dataclass
 class PreppedComplexUnit:
+    """
+    A protein or ligand part of a docking job, including the file path.
+    """
     name: str
     label: str = ""
     path: str = ""
@@ -44,6 +48,10 @@ class PreppedComplexUnit:
 
 @dataclass
 class PreppedComplex:
+    """
+    A protein-ligand complex to be docked, including the protein and ligand parts.
+    This contains the data for the DiffDock csv input file.
+    """
     name: str
     protein: PreppedComplexUnit
     ligand: PreppedComplexUnit
@@ -55,6 +63,9 @@ class PreppedComplex:
 
 @dataclass
 class PreppedRequest:
+    """
+    A DiffDock request after preparing the pdb, sdf, and csv input files.
+    """
     csv_file: str
     out_dir: str
     complex_infos: List[PreppedComplex]
@@ -69,6 +80,7 @@ class DiffDockOptions:
 
     @staticmethod
     def make(baseDir=None, requestId=None):
+        # get_id needs to run every time, so don't use default arguments
         if baseDir is None:
             baseDir = f"/tmp/diffdock{os.getpid()}"
         if requestId is None:
@@ -84,6 +96,9 @@ class DiffDockSetupException(Exception):
 
 
 class DiffDockApi:
+    """
+    Wrapper for running DiffDock with DiffDockProtocol objects for requests and responses.
+    """
     @staticmethod
     def run_diffdock(request: DiffDockProtocol.Request, options: DiffDockOptions=None) -> DiffDockProtocol.Response:
         try:
@@ -179,7 +194,7 @@ class DiffDockApi:
     def process_results(preppedRequest: PreppedRequest) -> List[DiffDockProtocol.Response]:
         """
         DiffDock produces sdf files for each docked pose, in directories by complex name.
-        This function gathers the resulting sdfs for each comples to be returned by the DiffDock API.
+        This function gathers the resulting sdfs for each complex to be returned by the DiffDock API.
         """
         allComplexResults = []
 
