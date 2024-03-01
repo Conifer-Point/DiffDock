@@ -4,6 +4,8 @@ from argparse import ArgumentParser, BooleanOptionalAction
 from websockets.sync.client import connect
 from dataclasses import dataclass
 
+from cp_ws_helpers import extractWsAppMessage, formWsAppMessage
+
 @dataclass
 class Expectations:
     hasResults: bool = False
@@ -20,9 +22,8 @@ class Expectations:
 
 def main():
     print(f'Running test-send with {args}')
-    wsUrl = f'ws://{args.host}:{args.port}'
     if args.run_tests:
-        runTests(wsUrl)
+        runTests(args)
     else:
         if args.expectError:
             expectations = Expectations.makeError()
@@ -34,31 +35,37 @@ def main():
                 expectations.totalPoseCount = args.expectTotalPoseCount
         else:
             expectations = None
-        sendATestFile(wsUrl, args.requestFile, expectations)
+        sendATestFile(args, args.requestFile, expectations)
 
-def sendATestFile(wsUrl, filename, expectations=None):
+def sendATestFile(args, filename, expectations=None):
     with open(filename, 'r', encoding='utf8') as reqFile:
         requestData = reqFile.read()
-    return sendATest(wsUrl, requestData, expectations)
+    return sendATest(args, requestData, expectations)
 
-def sendATest(wsUrl, requestData, expectations=None):
+def sendATest(args, requestData, expectations=None):
+    wsUrl = f'ws://{args.host}:{args.port}'
     start = time.time()
     with connect(wsUrl) as websocket:
-        websocket.send(requestData)
+        websocket.send(getTestPayload(args, requestData))
         allResponses = []
 
         while True:
             response = websocket.recv()
             print(response)
-            responseObj = json.loads(response)
+            requestId, cmdName, responseData = extractWsAppMessage(response)
+            responseObj = json.loads(responseData)
             allResponses.append(responseObj)
             messageType = responseObj.get("messageType")
             if messageType == "status":
                 print(f"Received status: {responseObj['message']}, still waiting for error or results.")
                 continue
             else:
-                print("Received {messageType}. Finished with this request.")
+                print(f"Received {messageType}. Finished with this request.")
                 finalResponse = responseObj
+                if args.like_wsapps:
+                    # WsApps send the final `completed` message
+                    response = websocket.recv()
+                    print(response)
                 break
 
         end = time.time()
@@ -82,8 +89,19 @@ def sendATest(wsUrl, requestData, expectations=None):
 
         return allResponses, finalResponse, start, end
 
+count = 0
+def getTestPayload(args, requestData):
+    if not args.like_wsapps:
+        return requestData
 
-def runTests(websocket):
+    # Format request like wsapp: `<request id> <cmd name> <message>`
+    global count
+    cmdName = 'test-send-diffdock-request'
+    requestId = f'#{cmdName}{count}'
+    count += 1
+    return formWsAppMessage(requestId, cmdName, requestData)
+
+def runTests(args):
     testCases = [
         # filename, expectations
         ('bad_pdb', Expectations.makeError()),
@@ -97,7 +115,7 @@ def runTests(websocket):
 
     ]
     for filename, expectations in testCases:
-        sendATestFile(websocket, f'cp_tests/{filename}.json', expectations)
+        sendATestFile(args, f'cp_tests/{filename}.json', expectations)
     print("DONE WITH TESTS")
 
 
@@ -109,6 +127,7 @@ parser.add_argument('--expectError', action=BooleanOptionalAction, type=bool, he
 parser.add_argument('--expectResultCount', type=int, help='Whether the request is expected to produce an error')
 parser.add_argument('--expectTotalPoseCount', type=int, help='Whether the request is expected to produce an error')
 parser.add_argument('--run-tests', action=BooleanOptionalAction, type=bool, help='run all tests')
+parser.add_argument('--like-wsapps', action=BooleanOptionalAction, type=bool, help='Add Bioleap-style requestids')
 args = parser.parse_args()
 
 main()

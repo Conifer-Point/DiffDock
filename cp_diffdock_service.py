@@ -9,8 +9,9 @@ from argparse import ArgumentParser
 
 from cp_diffdock_protocol import DiffDockProtocol
 from cp_diffdock_api import DiffDockApi
+from cp_ws_helpers import extractWsAppMessage, formWsAppMessage, formCompletedMessage
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('diffdock_service')
 
 #
@@ -23,15 +24,20 @@ async def handleRequest(websocket, queue):
     Receive a request and put it into the queue.
     Make sure we keep the websocket so we can send the response when docking finishes.
     """
-    message = await websocket.recv()
+    try:
+        message = await websocket.recv()
+    except Exception as ex:
+        log.error(f"Exception reading from websocket: {ex}. Can't handle this request.")
+        return
+
     log.info("Received a request.")
-    requestId, cmdName, requestData = extractWsAppRequest(message)
+    requestId, cmdName, requestData = extractWsAppMessage(message)
     requestContext = websocket, requestId
 
     try:
         requestObj = DiffDockProtocol.Request.from_json(requestData)
     except:
-        log.exception(f"Rejected a request")
+        log.exception(f"Rejected a request:\nMessage: {message}\nrequestData: {requestData}")
         await sendError(requestContext, f"Invalid request")
         return
 
@@ -111,51 +117,47 @@ async def main(host="localhost", port=9002, max_size=2**24, worker_count=5):
     finally:
         log.info("DiffDock service finished.")
         os._exit(0)
-        
 
-## Helpers
-def extractWsAppRequest(req):
-    """
-    Bioleap WsApps requests look like `<requestid> <cmdname> <request data>`
-    """
-    match = re.match("(#[a-z-_]+\d+) ([a-z-_]+) (\{.*\})", req)
-    if match:
-        requestId, cmdName, data = match.groups()
-        return requestId, cmdName, data
-    else:
-        return None, None, req
 
+async def sendToWebsocket(websocket, data):
+    try:
+        return await websocket.send(data)
+    except Exception as ex:
+        log.error(f"Exception encountered when writing to a websocket: {ex}")
 
 async def sendPacket(requestContext, responseObj):
-    responseData = responseObj.to_json()
     websocket, requestId = requestContext
+    if requestId:
+        return await sendWsAppPacket(requestContext, responseObj)
+    else:
+        return await sendToWebsocket(websocket, responseObj.to_json())
 
-    if not requestId:
-        return await websocket.send(responseData)
-
-    # We have a Bioleap WsApp request id
-    responseCmd = None
+async def sendWsAppPacket(requestContext, responseObj):
+    """
+    Bioleap WsApp (bfd-server) messages look like `#<request id> <cmd name> <message>`
+    and a request must be terminated with a `completed` message.
+    """
+    websocket, requestId = requestContext
     messageType = responseObj.messageType
-    complete = False
+    responseCmd = None
+    needsComplete = False
     if messageType == DiffDockProtocol.MessageType.ERROR:
         responseCmd = "diffdock-error"
-        complete = True
+        needsComplete = True
     elif messageType == DiffDockProtocol.MessageType.RESULTS:
         responseCmd = "diffdock-results"
-        complete = True
+        needsComplete = True
     elif messageType == DiffDockProtocol.MessageType.STATUS:
         responseCmd = "diffdock-status"
 
-    payloadParts = [x for x in [requestId, responseCmd, responseData] if x]
-
-    payload = ' '.join(payloadParts)
+    payload = formWsAppMessage(requestId, responseCmd, responseObj.to_json())
     log.info(f'Sending {payload}')
-    await websocket.send(payload)
-    if complete:
-        # For Bioleap WsApps we need to end with a `complete` message
-        log.info(f'Sending complete')
-        completePayload = ' '.join([requestId, 'completed'])
-        return await websocket.send(completePayload)
+    await sendToWebsocket(websocket, payload)
+    if needsComplete:
+        # wsApp messages need a `complete` at the end of the transaction
+        log.info(f'Sending completed')
+        completePayload = formCompletedMessage(requestId)
+        return await sendToWebsocket(websocket, completePayload)
 
 async def sendStatus(requestContext, status):
     responseObj = DiffDockProtocol.Response.makeStatus(status)

@@ -18,7 +18,7 @@ def main(args):
         with open(args.input, 'r', encoding='utf8') as inf:
             inputJson = inf.read()
         request = DiffDockProtocol.Request.from_json(inputJson)
-        options = DiffDockOptions()
+        options = DiffDockOptions.make()
         if args.workdir:
             options.work_dir = Path(args.workdir)
     except Exception as ex:
