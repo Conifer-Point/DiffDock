@@ -109,10 +109,10 @@ def runTests(args):
         ('incomplete', Expectations.makeError()),
         ('malformed', Expectations.makeError()),
         ('nothing', Expectations.makeResults(0)),
-        ('request', Expectations.makeResults(1)),
+        ('request', Expectations.makeResults(1, 11)),
         ('request1.5', Expectations.makeResults(2, 11)), # 10 poses with confidences, plus a repeat of rank1
-        ('request-slash', Expectations.makeResults(1)),
-        ('request3', Expectations.makeResults(6)),
+        ('request-slash', Expectations.makeResults(1, 11)),
+        ('request3', Expectations.makeResults(6, 66)),
 
     ]
     for filename, expectations in testCases:
