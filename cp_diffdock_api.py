@@ -124,6 +124,7 @@ class DiffDockApi:
         except DiffDockNothingToDoException:
             return DiffDockProtocol.Response.makeResults()
         except Exception as ex:
+            log.exception("DiffDock request failed with exception")
             return DiffDockProtocol.Response.makeError(f"DiffDock failed. {ex}")
 
 
@@ -134,7 +135,7 @@ class DiffDockApi:
         to fulfill the DiffDock request.
         """
 
-        if len(docking_request.proteins) == 0 or len(docking_request.ligands) == 0:
+        if not docking_request.proteins or not docking_request.ligands:
             raise DiffDockNothingToDoException()
 
         # Create temp directory for this run
@@ -149,28 +150,28 @@ class DiffDockApi:
                 raise DiffDockSetupException(f"Could not prepare work directory, errcode {e.errno} ({e.strerror})")
 
         # Write and remember pdb files
+        # Use proteinN.pdb for filenames, so don't have to worry about sanitization
         protein_entries: List[PreppedComplexUnit] = []
         for protein_i, protein in enumerate(docking_request.proteins):
             protein_name, proteinData = protein
             protein_label = f"protein{protein_i}"
             pdb_file = work_dir / f"{protein_label}.pdb"
             try:
-                with open(pdb_file, 'w') as f:
-                    f.write(proteinData)
+                pdb_file.write_text(proteinData)
                 protein_entries.append(PreppedComplexUnit(protein_name, protein_label, pdb_file))
             except IOError as e:
                 msg = f"DiffDock failed to write a protein file: {e.strerror}"
                 protein_entries.append(PreppedComplexUnit(protein_name, error=msg))
 
         # Write and remember ligand files
+        # Use ligandN.sdf for filenames, so don't have to worry about sanitization
         ligand_entries: List[PreppedComplexUnit] = []
         for ligand_i, ligand in enumerate(docking_request.ligands):
             ligand_name, ligandData = ligand
             ligand_label = f"ligand{ligand_i}"
             sdf_file = work_dir / f"{ligand_label}.sdf"
             try:
-                with open(sdf_file, 'w') as f:
-                    f.write(ligandData)
+                sdf_file.write_text(ligandData)
                 ligand_entries.append(PreppedComplexUnit(ligand_name, ligand_label, sdf_file))
             except IOError as e:
                 msg = f"DiffDock failed to write ligand file: {e.strerror}"
@@ -211,6 +212,7 @@ class DiffDockApi:
             complexName, proteinUnit, ligandUnit = complexInfo
             proteinName = proteinUnit.name
             ligandName = ligandUnit.name
+            # complexName is like `proteinN-ligandN` and so is safe for filesystem
             resultDir = preppedRequest.out_dir / complexName
             if not os.path.isdir(resultDir):
                 noPosesError = "No poses generated."
@@ -223,10 +225,8 @@ class DiffDockApi:
 
             # Process the sdfs in the output directory
             poses = []
-            for dir_entry in os.scandir(resultDir):
-                filepath = dir_entry.path
-                filename = os.path.basename(filepath)
-
+            for sdf in resultDir.glob("*.sdf"):
+                filename = sdf.name
                 # Regex to get rank and confidence
                 rankRegex = re.compile(r"rank(\d+)(_confidence(-?[0-9.]+))?\.sdf")
                 match = rankRegex.match(filename)
@@ -238,9 +238,12 @@ class DiffDockApi:
                     confidenceFloat = -1
                     if confidenceStr:
                         confidenceFloat = float(confidenceStr)
-                    with open(filepath, 'r') as f:
-                        fileContent = f.read()
+                    fileContent = sdf.read_text()
                     poses.append(DiffDockProtocol.Pose(filename, fileContent, rankInt, confidenceFloat))
+                else:
+                    # This is the results directory created by DiffDock.
+                    # Nothing else is expected to be in it, but it's possible they could make changes.
+                    pass
 
             poses.sort(key=lambda pose: pose.rank)
             allComplexResults.append(DiffDockProtocol.Result(proteinName, ligandName, poses=poses))
@@ -249,13 +252,22 @@ class DiffDockApi:
 
     @staticmethod
     def make_request_csv(entries: List[PreppedComplex]) -> str:
-        header = "complex_name,protein_path,ligand_description,protein_sequence\n"
-        csv = ""
+        headerLine = ['complex_name','protein_path','ligand_description','protein_sequence']
+        lines = []
         for entry in entries:
             complex_name, protein_unit, ligand_unit = entry
-            log.info(f"Working with {complex_name=} {type(protein_unit)} {type(ligand_unit)}")
             protein_name, protein_label, protein_file = protein_unit
             ligand_name, ligand_label, ligand_file = ligand_unit
             if protein_unit.ok() and ligand_unit.ok():
-                csv += f"{complex_name},{protein_file},{ligand_file},\n"
-        return "" if csv == "" else header + csv
+                # We just use the protein PDB, not the protein sequence
+                lines.append([complex_name, str(protein_file), str(ligand_file), ''])
+        if lines:
+            lines.insert(0, headerLine)
+            # Create the csv by joining the columns and lines
+            # Append '\n' so the last line is terminated with newline.
+            # The names are all based on proteinN/ligandN and are safe for csv (no commas).
+            return ''.join(
+                [','.join(line) + '\n' for line in lines]
+            )
+        else:
+            return ""

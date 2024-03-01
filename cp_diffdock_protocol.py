@@ -118,4 +118,4 @@ class DiffDockProtocol:
             )
 
         def to_json(self):
-            return json.dumps(self, default=lambda x: x.__dict__)
+            return json.dumps(asdict(self))
