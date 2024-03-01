@@ -91,6 +91,9 @@ class DiffDockOptions:
         )
 
 
+class DiffDockNothingToDoException(Exception):
+    pass
+
 class DiffDockSetupException(Exception):
     pass
 
@@ -118,6 +121,8 @@ class DiffDockApi:
             response = DiffDockApi.process_results(preppedRequest)
             log.info("diffdock prepared response.")
             return response
+        except DiffDockNothingToDoException:
+            return DiffDockProtocol.Response.makeResults()
         except Exception as ex:
             return DiffDockProtocol.Response.makeError(f"DiffDock failed. {ex}")
 
@@ -128,6 +133,9 @@ class DiffDockApi:
         DiffDock works on files in directories. This function prepares the pdb, sdf, and csv files needed
         to fulfill the DiffDock request.
         """
+
+        if len(docking_request.proteins) == 0 or len(docking_request.ligands) == 0:
+            raise DiffDockNothingToDoException()
 
         # Create temp directory for this run
         if options is None:

@@ -108,6 +108,7 @@ def runTests(args):
         ('empty', Expectations.makeError()),
         ('incomplete', Expectations.makeError()),
         ('malformed', Expectations.makeError()),
+        ('nothing', Expectations.makeResults(0)),
         ('request', Expectations.makeResults(1)),
         ('request1.5', Expectations.makeResults(2, 11)), # 10 poses with confidences, plus a repeat of rank1
         ('request-slash', Expectations.makeResults(1)),
