@@ -2,7 +2,7 @@
 
 # Pip install and copy files
 # May need root or bmaps-server permission
-install: DEST_DIR=/opt/diffdock
+install: DEST_DIR?=/opt/diffdock
 install:
 	-mkdir $(DEST_DIR)
 	cd $(DEST_DIR) && python3 -m venv venv
@@ -13,19 +13,43 @@ install:
 	# do them all together.
 	cd $(DEST_DIR) && . venv/bin/activate && $(foreach pkg, $(shell cat ./requirements.txt), pip install $(pkg);)
 
-# Download and cache a large torch model
-seed: DIFFDOCK_DIR=/opt/diffdock
-seed:
-	cd $(DIFFDOCK_DIR)/DiffDockCP && . ../venv/bin/activate && TORCH_HOME=$(DIFFDOCK_DIR) python -m inference
+install_dev: DEST_DIR?=/opt/diffdock_dev
+install_dev:
+	make install DEST_DIR=$(DEST_DIR)
 
-# Test run
-run: DIFFDOCK_DIR=/opt/diffdock
-run: OUT_DIR=
-run: PDB=
-run: SDF=
-run:
-	if test -z $(OUT_DIR) || test -z $(PDB) || test-z $(SDF); then echo "Please define PDB SDF and OUT_DIR"; exit 1; fi
-	cd $(DIFFDOCK_DIR)/DiffDockCP && . ../venv/bin/activate && TORCH_HOME=$(DIFFDOCK_DIR) python -m inference --complex_name 'TEST' --protein_path $(PDB) --ligand_description $(SDF) --out_dir $(OUT_DIR)
+install_qa: DEST_DIR?=/opt/diffdock_qa
+install_qa:
+	make install DEST_DIR=$(DEST_DIR)
+
+# Download and cache a large torch model
+seed: DIFFDOCK_DIR?=/opt/diffdock
+seed:
+	cd $(DIFFDOCK_DIR)/DiffDockCP && . ../venv/bin/activate && TORCH_HOME=$(DIFFDOCK_DIR)/torch python -m inference
+
+seed_dev: DIFFDOCK_DIR?=/opt/diffdock_dev
+seed_dev:
+	make seed DIFFDOCK_DIR=$(DIFFDOCK_DIR)
+
+seed_qa: DIFFDOCK_DIR?=/opt/diffdock_qa
+seed_qa:
+	make seed DIFFDOCK_DIR=$(DIFFDOCK_DIR)
+
+# Install service
+service:
+	cp diffdock-server.service /etc/systemd/system
+	systemctl daemon-reload
+	service diffdock-server start
+
+service_dev:
+	cp diffdock-server_dev.service /etc/systemd/system
+	systemctl daemon-reload
+	service diffdock-server_dev start
+
+service_qa:
+	cp diffdock-server_qa.service /etc/systemd/system
+	systemctl daemon-reload
+	service diffdock-server_qa start
+
 
 # Create the root directory (may need root permission)
 root: DEST_DIR=/opt/diffdock

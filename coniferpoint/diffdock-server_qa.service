@@ -1,0 +1,16 @@
+[Unit]
+Description=DiffDock Server (QA)
+After=network-online.target
+
+[Service]
+User=bmaps-server
+WorkingDirectory=/opt/diffdock_qa/DiffDockCP
+Environment=LD_LIBRARY_PATH=/usr/local/cuda/lib
+Environment=CUDA_VISIBLE_DEVICES=3
+Environment=TORCH_HOME=/opt/diffdock_qa/torch
+Environment=VIRTUAL_ENV=/opt/diffdock_qa/venv
+ExecStart=/opt/diffdock_qa/venv/bin/python -m cp_diffdock_service --port 9006 --worker_count 1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
