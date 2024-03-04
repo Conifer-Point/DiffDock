@@ -45,7 +45,7 @@ async def handleRequest(websocket, queue):
         return
 
     # Enqueue
-    log.info("handleRequest running a request...")
+    log.info("handleRequest queuing a request...")
     try:
         # Put the request into the queue with a condition to resolve when it finishes.
         # Condition protects the websocket from closing early.

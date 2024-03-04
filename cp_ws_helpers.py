@@ -7,7 +7,7 @@ def extractWsAppMessage(wholeMessage):
     """
     Bioleap WsApps messages look like `<requestid> <cmdname> <message data>`
     """
-    match = re.match("(#[a-z-_]+\d+) ([a-z-_]+) (\{.*\})", wholeMessage, re.DOTALL)
+    match = re.match(r"^(#[a-z-_]+\d+) ([a-z-_]+) (.*)$", wholeMessage, re.DOTALL)
     if match:
         requestId, cmdName, message = match.groups()
         return requestId, cmdName, message
