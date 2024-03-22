@@ -51,12 +51,16 @@ async def handleRequest(websocket, queue):
         # Condition protects the websocket from closing early.
         condition = asyncio.Condition()
         await queue.put((requestObj, requestContext, condition))
+        log.info(f"handleRequest queue size is now {queue.qsize()}")
         await sendStatus(requestContext, "Request received")
         async with condition:
             await condition.wait()
+            log.info(f"handleRequest finished processing a request")
     except Exception as ex:
         log.exception(f"handleRequest encountered exception")
         await sendError(requestContext, f"Service exception: {ex}")
+    finally:
+        log.info(f"handleRequest finished")
 
 
 async def queueWorker(queue):
@@ -68,7 +72,7 @@ async def queueWorker(queue):
             # Wait for an item from the queue
             requestObj, requestContext, condition = await queue.get()
 
-            log.info("worker running a request...")
+            log.info(f"queueWorker running a request... (queue size is now {queue.qsize()})")
             try:
                 # Since this is async, but diffdock is not, it seems it is tricky.
                 # run_in_executor seemed to do the trick.
@@ -105,23 +109,26 @@ async def main(host="localhost", port=9002, max_size=2**24, worker_count=5):
 
     log.info(f"DiffDock service running with pid {os.getpid()}, listening at {host}:{port}...")
     start_server = serve(handlerWrapper, host, port, max_size=max_size)
+    server = asyncio.ensure_future(start_server)
 
     log.info(f"DiffDock ready.")
     try:
-        await start_server
         await asyncio.Future()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         log.info("Received KeyboardInterrupt")
 
     # SHUTDOWN
     try:
         log.info("DiffDock service shutting down...let this finish naturally if you can")
-        server.close()
-        loop.run_until_complete(server.wait_closed())
-        for worker in workers:
-            worker.cancel()
+        cancelingTasks = [server, *workers]
+        for task in cancelingTasks:
+            log.info(f"Canceling task {task}...")
+            task.cancel()
+        log.info("Waiting for tasks to finish...")
+        exceptions = await asyncio.gather(*cancelingTasks, return_exceptions=True)
+        log.info("Done with all tasks.")
     except:
-        log.info("DiffDock service caught shutting down, will force termination")
+        log.exception("DiffDock service caught exception shutting down. Forcing termination.")
     finally:
         log.info("DiffDock service finished.")
         os._exit(0)
