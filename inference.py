@@ -105,7 +105,6 @@ def get_parser():
     # CONIFER POINT
     parser.add_argument('--add_hs', action=BooleanOptionalAction, default=False, help='Add hydrogens to poses before writing out poses')
     parser.add_argument('--keep_src_3d', action=BooleanOptionalAction, default=False, help='Whether or not to drop the 3D coordinates for 3D input')
-oses')
 
     return parser
 
