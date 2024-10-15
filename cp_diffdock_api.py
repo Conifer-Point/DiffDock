@@ -8,7 +8,7 @@ from dataclasses import dataclass, asdict
 from typing import List
 
 from cp_diffdock_protocol import DiffDockProtocol
-from cp_inference_module import InferenceArgs, RunInference
+from inference import main as run_inference, get_parser
 
 log = logging.getLogger('diffdock_api')
 
@@ -108,16 +108,15 @@ class DiffDockApi:
             log.info("diffdock preparing request...")
             preppedRequest = DiffDockApi.prepare_request(request, options)
 
-            args = InferenceArgs({
-                "protein_ligand_csv": preppedRequest.csv_file,
-                "out_dir": preppedRequest.out_dir,
-                "add_hs": request.add_hs,
-                "keep_hs": request.keep_hs,
-                "keep_src_3d": request.keep_src_3d,
-                "samples_per_complex": request.samples_per_complex,
-            })
+            args = get_parser().parse_args(args=[])
+            args.protein_ligand_csv = preppedRequest.csv_file
+            args.out_dir = preppedRequest.out_dir
+            args.add_hs = request.add_hs
+            args.keep_hs = request.keep_hs
+            args.keep_src_3d = request.keep_src_3d
+            args.samples_per_complex = request.samples_per_complex
             log.info("diffdock running inference...")
-            RunInference(args)
+            run_inference(args)
             response = DiffDockApi.process_results(preppedRequest)
             log.info("diffdock prepared response.")
             return response
