@@ -5,13 +5,13 @@
 install: DEST_DIR?=/opt/diffdock
 install:
 	-mkdir $(DEST_DIR)
-	cd $(DEST_DIR) && python3 -m venv venv
+	cd $(DEST_DIR) && python3.10 -m venv venv
 	rsync -az --exclude=.git --exclude=coniferpoint ../* $(DEST_DIR)/DiffDockCP
 	# Make sure we fail with an error before invoking the foreach. If venv fails, the foreach will still attempt all the installs.
 	cd $(DEST_DIR) && . venv/bin/activate
 	# Use foreach to install each python package individually because it fails when it tries to
 	# do them all together.
-	cd $(DEST_DIR) && . venv/bin/activate && $(foreach pkg, $(shell cat ./requirements_diffdock.txt ./requirements_service.txt), pip install $(pkg);)
+	cd $(DEST_DIR) && . venv/bin/activate && pip install --upgrade pip && $(foreach pkg, $(shell cat ./requirements_diffdock.txt ./requirements_service.txt), pip install $(pkg);)
 
 install_dev: DEST_DIR?=/opt/diffdock_dev
 install_dev:

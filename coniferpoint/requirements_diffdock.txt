@@ -13,7 +13,7 @@ pyyaml
 scipy
 networkx
 biopython
-rdkit-pypi
+rdkit
 e3nn
 spyrmsd
 pandas
@@ -21,3 +21,4 @@ biopandas
 prolif
 py3dmol
 fair-esm
+prody
