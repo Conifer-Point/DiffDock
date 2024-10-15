@@ -19,7 +19,7 @@ def _get_formatter(loglevel="INFO"):
 
 
 def remove_all_handlers(logger):
-    while logger.hasHandlers():
+    while logger.hasHandlers() and len(logger.handlers) > 0:
         logger.removeHandler(logger.handlers[0])
 
 
