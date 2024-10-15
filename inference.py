@@ -2,7 +2,7 @@ import functools
 import logging
 import pprint
 import traceback
-from argparse import ArgumentParser, Namespace, FileType
+from argparse import ArgumentParser, Namespace, FileType, BooleanOptionalAction
 import copy
 import os
 from functools import partial
