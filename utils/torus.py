@@ -32,11 +32,11 @@ if os.path.exists('.p.npy'):
     p_ = np.load('.p.npy')
     score_ = np.load('.score.npy')
 else:
-    print("Precomputing and saving to cache torus distribution table")
     p_ = p(x, sigma[:, None], N=100)
     np.save('.p.npy', p_)
 
-    score_ = grad(x, sigma[:, None], N=100) / p_
+    eps = np.finfo(p_.dtype).eps
+    score_ = grad(x, sigma[:, None], N=100) / (p_ + eps)
     np.save('.score.npy', score_)
 
 

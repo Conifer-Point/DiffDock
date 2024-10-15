@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from scipy.spatial.transform import Rotation
 
-MIN_EPS, MAX_EPS, N_EPS = 0.01, 2, 1000
+MIN_EPS, MAX_EPS, N_EPS = 0.0005, 4, 2000
 X_N = 2000
 
 """
@@ -19,9 +19,9 @@ def _compose(r1, r2):  # R1 @ R2 but for Euler vecs
 
 
 def _expansion(omega, eps, L=2000):  # the summation term only
-    p = 0
-    for l in range(L):
-        p += (2 * l + 1) * np.exp(-l * (l + 1) * eps**2) * np.sin(omega * (l + 1 / 2)) / np.sin(omega / 2)
+    l_vec = np.arange(L).reshape(-1, 1)
+    p = ((2 * l_vec + 1) * np.exp(-l_vec * (l_vec + 1) * eps ** 2 / 2)
+         * np.sin(omega * (l_vec + 1 / 2)) / np.sin(omega / 2)).sum(0)
     return p
 
 
@@ -33,23 +33,21 @@ def _density(expansion, omega, marginal=True):  # if marginal, density over [0, 
 
 
 def _score(exp, omega, eps, L=2000):  # score of density over SO(3)
-    dSigma = 0
-    for l in range(L):
-        hi = np.sin(omega * (l + 1 / 2))
-        dhi = (l + 1 / 2) * np.cos(omega * (l + 1 / 2))
-        lo = np.sin(omega / 2)
-        dlo = 1 / 2 * np.cos(omega / 2)
-        dSigma += (2 * l + 1) * np.exp(-l * (l + 1) * eps**2) * (lo * dhi - hi * dlo) / lo ** 2
+    l_vec = np.arange(L).reshape(-1, 1)
+    hi = np.sin((l_vec + 1 / 2) * omega)
+    dhi = (l_vec + 1 / 2) * np.cos((l_vec + 1 / 2) * omega)
+    lo = np.sin(omega / 2)
+    dlo = 1 / 2 * np.cos(omega / 2)
+    dSigma = ((2 * l_vec + 1) * np.exp(-l_vec * (l_vec + 1) * eps**2 / 2) * (lo * dhi - hi * dlo) / lo ** 2).sum(0)
     return dSigma / exp
 
 
-if os.path.exists('.so3_omegas_array2.npy'):
-    _omegas_array = np.load('.so3_omegas_array2.npy')
-    _cdf_vals = np.load('.so3_cdf_vals2.npy')
-    _score_norms = np.load('.so3_score_norms2.npy')
-    _exp_score_norms = np.load('.so3_exp_score_norms2.npy')
+if os.path.exists('.so3_omegas_array4.npy'):
+    _omegas_array = np.load('.so3_omegas_array4.npy')
+    _cdf_vals = np.load('.so3_cdf_vals4.npy')
+    _score_norms = np.load('.so3_score_norms4.npy')
+    _exp_score_norms = np.load('.so3_exp_score_norms4.npy')
 else:
-    print("Precomputing and saving to cache SO(3) distribution table")
     _eps_array = 10 ** np.linspace(np.log10(MIN_EPS), np.log10(MAX_EPS), N_EPS)
     _omegas_array = np.linspace(0, np.pi, X_N + 1)[1:]
 
@@ -60,10 +58,10 @@ else:
 
     _exp_score_norms = np.sqrt(np.sum(_score_norms**2 * _pdf_vals, axis=1) / np.sum(_pdf_vals, axis=1) / np.pi)
 
-    np.save('.so3_omegas_array2.npy', _omegas_array)
-    np.save('.so3_cdf_vals2.npy', _cdf_vals)
-    np.save('.so3_score_norms2.npy', _score_norms)
-    np.save('.so3_exp_score_norms2.npy', _exp_score_norms)
+    np.save('.so3_omegas_array4.npy', _omegas_array)
+    np.save('.so3_cdf_vals4.npy', _cdf_vals)
+    np.save('.so3_score_norms4.npy', _score_norms)
+    np.save('.so3_exp_score_norms4.npy', _exp_score_norms)
 
 
 def sample(eps):
@@ -93,4 +91,3 @@ def score_norm(eps):
     eps_idx = (np.log10(eps) - np.log10(MIN_EPS)) / (np.log10(MAX_EPS) - np.log10(MIN_EPS)) * N_EPS
     eps_idx = np.clip(np.around(eps_idx).astype(int), a_min=0, a_max=N_EPS-1)
     return torch.from_numpy(_exp_score_norms[eps_idx]).float()
-

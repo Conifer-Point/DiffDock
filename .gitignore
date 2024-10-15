@@ -5,6 +5,8 @@ inference_out_dir_not_specified
 renew.sh
 tmux_renew.sh
 images
+tmp/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -123,14 +125,14 @@ local_config_inference2.yml
 .p.npy
 .score.npy
 # this ignores everything in data except for the file
-!/data
 /data/*
+!/data
 !/data/splits
-!/data/protein_ligand_example_csv.csv
+!/data/protein_ligand_example*
 !/data/testset_csv.csv
 !/data/INDEX_general_PL_data.2020
 test_run
-
+artifacts
 cache
 wandb
 logs
@@ -154,9 +156,9 @@ results
 !/runs/flexible_self_docking
 local_config.yml
 local_config_inference.yml
-local_config_confidence.yml
+local_config_filtering.yml
 temp1.py
-temp5.py
+temp2.py
 temp3.py
 temp4.py
 temp5.py
